@@ -22,7 +22,7 @@ export const handler: Handler = async (event, context) => {
   }
   console.log('InstanceId: ', instanceId);
 
-  assert(process.env.SHARD_ID, 'shardId env variable is required');
+  assert(process.env.NETWORK_ID, 'networkId env variable is required');
 
   try {
     const validatorKey = await getCurrentKeyUsedByEC2Instance(instanceId);
@@ -47,7 +47,7 @@ export const handler: Handler = async (event, context) => {
     }
 
     await detachKeyFromEc2Instance(validatorKey);
-    await drainEcsInstance(process.env.SHARD_ID as string, instanceId);
+    await drainEcsInstance(process.env.NETWORK_ID as string, instanceId);
 
     await sendLifecycleHookSuccess(event.detail);
     console.log('Cleaned up successfully.');
@@ -58,10 +58,10 @@ export const handler: Handler = async (event, context) => {
   }
 };
 
-async function drainEcsInstance(shardId: string, instanceId: string) {
+async function drainEcsInstance(networkId: string, instanceId: string) {
   try {
     //drain running task on the instance
-    const validatorClusterName = getValidatorClusterName(process.env.SHARD_ID as string);
+    const validatorClusterName = getValidatorClusterName(process.env.NETWORK_ID as string);
     const containerInstanceArn = await getContainerInstance(validatorClusterName, instanceId);
     //set container instance to draining, this will trigger instance connection draining
     await setContainerInstanceStateToDraining(validatorClusterName, containerInstanceArn);

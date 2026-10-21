@@ -9,7 +9,7 @@ import { Key } from 'aws-cdk-lib/aws-kms';
 import { ResourceName } from '../constants/resource-names';
 
 export interface ValidatorInfoTableProps {
-  shardId: string;
+  networkId: string;
   encryptionKey: Key;
 }
 
@@ -19,9 +19,9 @@ export class ValidatorInfoTable extends Construct {
 
   constructor(scope: Construct, id: string, props: ValidatorInfoTableProps) {
     super(scope, id);
-    this.tableName = ResourceName.Table.ValidatorKeys + props.shardId;
+    this.tableName = ResourceName.Table.ValidatorKeys + props.networkId;
 
-    this.table = new Table(this, 'KeysDDB' + props.shardId, {
+    this.table = new Table(this, 'KeysDDB' + props.networkId, {
       tableName: this.tableName,
       partitionKey: { name: 'KeyArn', type: AttributeType.STRING },
       billingMode: BillingMode.PAY_PER_REQUEST,

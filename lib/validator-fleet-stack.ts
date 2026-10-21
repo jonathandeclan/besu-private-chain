@@ -47,7 +47,7 @@ import { BlockPublicAccess, Bucket, BucketEncryption, ObjectOwnership } from 'aw
 import { Fn } from 'aws-cdk-lib';
 import {
   getAutoscalingGroupName,
-  getShardZoneName,
+  getNetworkZoneName,
   getValidatorClusterName,
   getValidatorFleetClusterName,
   getValidatorHostName,
@@ -56,7 +56,7 @@ import {
 import { NETWORK_CONFIG } from './constants/network';
 import { PUBLIC_KEYS_BASE64 } from './constants/keys';
 
-import { BootNodeArtifactGenerator } from './constructs/bootnode-artifact-generator';
+import { StaticNodesArtifactGenerator } from './constructs/static-nodes-artifact-generator';
 import { DLMPolicy } from './constructs/dlm-policy';
 import { GenesisGenerator } from './constructs/genesis-generator';
 import { InstanceLaunchHook } from './constructs/instance-launch-hook';
@@ -80,7 +80,7 @@ import { EC2DefaultPolicy } from './constants/iam-utils';
 import { NodeType } from './constants/node-type';
 
 import { getUserData } from './helper/ec2-helper';
-import { getBootnodesFileName, getGenesisFileName } from './helper/genesis-helper';
+import { getStaticNodesFileName, getGenesisFileName } from './helper/genesis-helper';
 import { NagSuppressions } from 'cdk-nag';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -93,7 +93,7 @@ import { PrivateChainMetricsNameSpace } from './constants/metrics';
 
 export interface ValidatorFleetInfrastructureProps extends StackProps {
   readonly stage: string;
-  readonly shardId: string;
+  readonly networkId: string;
   readonly allowedPrincipals: ArnPrincipal[];
   readonly imageProviderAccount: string;
   readonly fleetVpc: IVpc;
@@ -103,10 +103,10 @@ export interface ValidatorFleetInfrastructureProps extends StackProps {
 }
 
 export class ValidatorFleetInfrastructure extends Stack {
-  public static readonly STACK_NAME = 'PrivateChainValidatorFleet';
+  public static readonly STACK_NAME = 'Validators';
   private validatorKeyTable: ValidatorInfoTable;
   private ValidatorECCKeySet: ValidatorECCKeySet;
-  public readonly shardId: string;
+  public readonly networkId: string;
 
   private vpc: IVpc;
 
@@ -152,7 +152,7 @@ export class ValidatorFleetInfrastructure extends Stack {
 
   constructor(scope: App, id: string, props: ValidatorFleetInfrastructureProps) {
     super(scope, id, props);
-    this.shardId = props.shardId;
+    this.networkId = props.networkId;
     this.stage = props.stage;
     this.region = props.env.region ?? 'us-east-1';
     const stackAccount = props.env.account ?? '';
@@ -174,7 +174,7 @@ export class ValidatorFleetInfrastructure extends Stack {
     this.createKMSKeysAndRoles();
     this.createGenesis(stackAccount);
 
-    this.createBootNodeArtifacts(stackAccount);
+    this.createStaticNodesArtifacts(stackAccount);
 
     this.createSnapshotManagement();
 
@@ -286,7 +286,7 @@ export class ValidatorFleetInfrastructure extends Stack {
 
   private createDDB(): void {
     this.validatorKeyTable = new ValidatorInfoTable(this, ResourceName.Table.ValidatorKeys, {
-      shardId: this.shardId,
+      networkId: this.networkId,
       encryptionKey: this.privateChainValidatorInfoTableKey,
     });
   }
@@ -296,19 +296,20 @@ export class ValidatorFleetInfrastructure extends Stack {
       resourcePrefix: 'Validator',
       serviceAccount: serviceAccount,
       region: this.region,
-      shardId: this.shardId,
+      networkId: this.networkId,
       configBucket: this.configBucket,
       validatorKeySet: this.ValidatorECCKeySet,
-      version: process.env.FIRST_DEPLOY ? 0 : 1
+      // Bump to regenerate the genesis file; the custom resource only re-runs when its id or payload changes.
+      version: process.env.FIRST_DEPLOY ? 0 : 2
     });
   }
 
-  private createBootNodeArtifacts(serviceAccount: string): void {
-    const bootNodeArtifactGenerator = new BootNodeArtifactGenerator(this, 'BootNodeArtifactGenerator', {
+  private createStaticNodesArtifacts(serviceAccount: string): void {
+    const staticNodesArtifactGenerator = new StaticNodesArtifactGenerator(this, 'StaticNodesArtifactGenerator', {
       resourcePrefix: 'Validator',
       serviceAccount: serviceAccount,
       region: this.region,
-      shardId: this.shardId,
+      networkId: this.networkId,
       configBucket: this.configBucket,
       validatorKeySet: this.ValidatorECCKeySet,
       version: process.env.FIRST_DEPLOY ? 0 : 1
@@ -321,7 +322,7 @@ export class ValidatorFleetInfrastructure extends Stack {
       numberOfKeys: this.numValidators,
       region: this.region,
       stage: this.stage,
-      namePrefix: `Shard-${this.shardId}-`,
+      namePrefix: `Network-${this.networkId}-`,
       retainRoles: false,
     });
 
@@ -341,7 +342,7 @@ export class ValidatorFleetInfrastructure extends Stack {
   }
 
   private createValidatorDNS() {
-    const zoneName = getShardZoneName(this.shardId);
+    const zoneName = getNetworkZoneName(this.networkId);
     this.validatorHostedZone = new PrivateHostedZone(this, 'ValidatorDNSHostedZone', {
       zoneName: zoneName,
       vpc: this.vpc,
@@ -351,7 +352,7 @@ export class ValidatorFleetInfrastructure extends Stack {
       new ARecord(this, 'AliasRecord' + keyNumber, {
         zone: this.validatorHostedZone,
         // Format has to match lifecycle hook.
-        recordName: getValidatorHostName(this.shardId, keyNumber),
+        recordName: getValidatorHostName(this.networkId, keyNumber),
         // Target cannot be empty. LifeCycle Launch Hook will UPSERT into this target
         // with a value corresponding to the IP address of the instance.
         target: RecordTarget.fromIpAddresses('127.0.0.1'),
@@ -397,7 +398,7 @@ export class ValidatorFleetInfrastructure extends Stack {
     // ECS Cluster
     this.ecsCluster = new Cluster(this, `ecs-cluster`, {
       vpc: this.vpc,
-      clusterName: getValidatorClusterName(this.shardId),
+      clusterName: getValidatorClusterName(this.networkId),
       containerInsights: true,
     });
     // Makes it easier to destroy / recreate stack.
@@ -405,9 +406,9 @@ export class ValidatorFleetInfrastructure extends Stack {
 
     const mountVolumeName = 'data-volume-0';
 
-    const taskExecutionRole = new Role(this, `Shard-${this.shardId}-taskExecutionRole`, {
+    const taskExecutionRole = new Role(this, `Network-${this.networkId}-taskExecutionRole`, {
       assumedBy: new ServicePrincipal('ecs-tasks.amazonaws.com'),
-      roleName: `Shard-${this.shardId}-taskExecutionRole`,
+      roleName: `Network-${this.networkId}-taskExecutionRole`,
     });
 
     taskExecutionRole.addManagedPolicy(
@@ -425,8 +426,8 @@ export class ValidatorFleetInfrastructure extends Stack {
     const cfnTaskDef = this.validatorEc2TaskDefinition.node.defaultChild as CfnTaskDefinition;
     cfnTaskDef.taskRoleArn = '';
 
-    const logGroup = new LogGroup(this, `Shard-${this.shardId}-Besu-LogGroup`, {
-      logGroupName: `Shard-${this.shardId}-Besu-LogGroup`,
+    const logGroup = new LogGroup(this, `Network-${this.networkId}-Besu-LogGroup`, {
+      logGroupName: `Network-${this.networkId}-Besu-LogGroup`,
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
@@ -438,10 +439,10 @@ export class ValidatorFleetInfrastructure extends Stack {
         `${imageProviderAccount}.dkr.ecr.${this.region}.amazonaws.com/besu:${BESU_IMAGE_TAG}`,
       ),
       memoryLimitMiB: process.env.BESU_MEMORY_LIMIT_GB ? parseInt(process.env.BESU_MEMORY_LIMIT_GB) * 1000 : 12000,
-      containerName: `blockchain-service-shard-${this.shardId}`,
+      containerName: `blockchain-service-network-${this.networkId}`,
       command: command,
       environment: {
-        BESU_NETWORK_ID: '' + (CHAIN_CONFIG.DEFAULT_NETWORK_ID + parseInt(this.shardId) - 1),
+        BESU_NETWORK_ID: this.networkId,
         BESU_RPC_HTTP_CORS_ORIGINS: 'all',
         BESU_RPC_HTTP_ENABLED: 'true',
         BESU_RPC_HTTP_HOST: '0.0.0.0',
@@ -464,14 +465,9 @@ export class ValidatorFleetInfrastructure extends Stack {
           protocol: ECSProtocol.TCP,
         },
         {
-          containerPort: CLIENT_CONFIG.DISCOVERY_PORT,
-          hostPort: CLIENT_CONFIG.DISCOVERY_PORT,
+          containerPort: CLIENT_CONFIG.P2P_PORT,
+          hostPort: CLIENT_CONFIG.P2P_PORT,
           protocol: ECSProtocol.TCP,
-        },
-        {
-          containerPort: CLIENT_CONFIG.DISCOVERY_PORT,
-          hostPort: CLIENT_CONFIG.DISCOVERY_PORT,
-          protocol: ECSProtocol.UDP,
         },
       ],
     });
@@ -486,9 +482,11 @@ export class ValidatorFleetInfrastructure extends Stack {
     return [
       `--data-path=${CLIENT_CONFIG.DATA_DIR}`,
       `--genesis-file=${CLIENT_CONFIG.CONFIG_DIR}/${CLIENT_CONFIG.GENESIS_FILE_NAME}`,
-      `--static-nodes-file=${CLIENT_CONFIG.CONFIG_DIR}/${CLIENT_CONFIG.BOOTNODES_FILE_NAME}`,
+      `--static-nodes-file=${CLIENT_CONFIG.CONFIG_DIR}/${CLIENT_CONFIG.STATIC_NODES_FILE_NAME}`,
+      '--discovery-enabled=false',
       '--Xdns-enabled=true',
-      `--p2p-port=${CLIENT_CONFIG.DISCOVERY_PORT}`,
+      '--Xdns-update-enabled=true',
+      `--p2p-port=${CLIENT_CONFIG.P2P_PORT}`,
       '--rpc-http-enabled=true',
       `--rpc-http-port=${CLIENT_CONFIG.HTTP_RPC_PORT}`,
       `--rpc-http-api=${process.env.ALLOWED_RPC_APIS ?? CLIENT_CONFIG.DEFAULT_ALLOWED_RPCS}`,
@@ -540,7 +538,7 @@ export class ValidatorFleetInfrastructure extends Stack {
   }
 
   private createASG(): void {
-    const asgName = getAutoscalingGroupName(this.shardId);
+    const asgName = getAutoscalingGroupName(this.networkId);
     const defaultInstanceRole = new Role(this, `validator-instance-role`, {
       assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
       roleName: `${asgName}-ValidatorDefaultRole`,
@@ -618,14 +616,14 @@ export class ValidatorFleetInfrastructure extends Stack {
     // Install OTel Collector via SSM State Manager (uses existing SSM VPC endpoint)
     new ssm.CfnAssociation(this, 'OTelCollectorAssociation', {
       name: 'AWS-ConfigureAWSPackage',
-      associationName: `Shard-${this.shardId}-OTelCollector`,
+      associationName: `Network-${this.networkId}-OTelCollector`,
       parameters: {
         action: ['Install'],
         name: ['AWSDistroOTel-Collector'],
       },
       targets: [{
         key: 'tag:aws:autoscaling:groupName',
-        values: [getAutoscalingGroupName(this.shardId)],
+        values: [getAutoscalingGroupName(this.networkId)],
       }],
       applyOnlyAtCronInterval: false,
     });
@@ -637,7 +635,7 @@ export class ValidatorFleetInfrastructure extends Stack {
       cluster: this.ecsCluster,
       taskDefinition: this.validatorEc2TaskDefinition,
       listenerPort: CLIENT_CONFIG.HTTP_RPC_PORT,
-      serviceName: `besu-privatechain-shard-${this.shardId}`,
+      serviceName: `besu-privatechain-network-${this.networkId}`,
       placementConstraints: [PlacementConstraint.distinctInstances()],
       publicLoadBalancer: false,
       // Settings to allow for one task at a time only deploys.
@@ -699,22 +697,22 @@ export class ValidatorFleetInfrastructure extends Stack {
       region: this.region,
       serviceAccount: serviceAccount,
       tableName: this.validatorKeyTable.tableName,
-      shardId: this.shardId,
-      autoScalingGroupName: getAutoscalingGroupName(this.shardId),
+      networkId: this.networkId,
+      autoScalingGroupName: getAutoscalingGroupName(this.networkId),
       hostedZone: this.validatorHostedZone,
       s3BucketName: this.configBucket.bucketName,
       genesisFileName: getGenesisFileName(this.ValidatorECCKeySet.keys().map(String)),
-      bootnodesFileName: getBootnodesFileName(this.ValidatorECCKeySet.keys().map(String)),
+      staticNodesFileName: getStaticNodesFileName(this.ValidatorECCKeySet.keys().map(String)),
       ebsEncryptionKeyArn: this.ebsVolumeEncryptionKey.keyArn,
     });
 
     this.launchHookEventRule = new Rule(this, 'LaunchEventRule', {
-      ruleName: 'ValidatorLaunchEventRule' + this.shardId,
+      ruleName: 'ValidatorLaunchEventRule' + this.networkId,
       eventPattern: {
         source: ['aws.autoscaling'],
         detail: {
           LifecycleTransition: ['autoscaling:EC2_INSTANCE_LAUNCHING'],
-          AutoScalingGroupName: [getAutoscalingGroupName(this.shardId)],
+          AutoScalingGroupName: [getAutoscalingGroupName(this.networkId)],
         },
       },
     });
@@ -730,17 +728,17 @@ export class ValidatorFleetInfrastructure extends Stack {
       region: this.region,
       serviceAccount: serviceAccount,
       tableName: this.validatorKeyTable.tableName,
-      shardId: this.shardId,
-      autoScalingGroupName: getAutoscalingGroupName(this.shardId),
+      networkId: this.networkId,
+      autoScalingGroupName: getAutoscalingGroupName(this.networkId),
     });
 
     this.terminationHookEventRule = new Rule(this, 'TerminationEventRule', {
-      ruleName: 'ValidatorTerminationEventRule' + this.shardId,
+      ruleName: 'ValidatorTerminationEventRule' + this.networkId,
       eventPattern: {
         source: ['aws.autoscaling'],
         detail: {
           LifecycleTransition: ['autoscaling:EC2_INSTANCE_TERMINATING'],
-          AutoScalingGroupName: [getAutoscalingGroupName(this.shardId)],
+          AutoScalingGroupName: [getAutoscalingGroupName(this.networkId)],
         },
       },
     });
@@ -760,7 +758,7 @@ export class ValidatorFleetInfrastructure extends Stack {
       targetTag: targetTag,
       stage: this.stage,
       region: this.region as string,
-      shardId: this.shardId,
+      networkId: this.networkId,
     });
 
     const targetTagSearch = `${targetTag.key}=${targetTag.value}`;

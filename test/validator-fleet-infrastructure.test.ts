@@ -13,7 +13,7 @@ describe('Validator Fleet Infrastructure Stack', () => {
 
     // Create CommonInfrastructure to provide dependencies for ValidatorFleetInfrastructure
     const commonProps: CommonInfrastructureProps = {
-        shardId: process.env.SHARD || '1',
+        networkId: process.env.NETWORK_ID || '707073',
         stage: 'dev',
         env: { account: process.env.AWS_ACCOUNT_ID, region: process.env.AWS_REGION },
     };
@@ -24,7 +24,7 @@ describe('Validator Fleet Infrastructure Stack', () => {
     try {
         const validatorProps: ValidatorFleetInfrastructureProps = {
             stage: 'dev',
-            shardId: process.env.SHARD || '1',
+            networkId: process.env.NETWORK_ID || '707073',
             allowedPrincipals: [],
             imageProviderAccount: process.env.IMAGE_PROVIDER_ACCOUNT || '',
             fleetVpc: commonStack.getFleetVpc(),
@@ -41,7 +41,7 @@ describe('Validator Fleet Infrastructure Stack', () => {
     if (validatorTemplate) {
         test('creates ECS Cluster with daemon scheduling strategy', () => {
             validatorTemplate.hasResourceProperties('AWS::ECS::Cluster', {
-                ClusterName: `Shard${process.env.SHARD}-ValidatorCluster`,
+                ClusterName: `Network${process.env.NETWORK_ID || '707073'}-ValidatorCluster`,
             });
 
             validatorTemplate.hasResourceProperties('AWS::ECS::Service', {

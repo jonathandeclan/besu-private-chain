@@ -1,16 +1,16 @@
 export const CLIENT_CONFIG = {
   OTEL_PORT: 4317,
-  DISCOVERY_PORT: 30303,
+  P2P_PORT: 30303,
   HTTP_RPC_PORT: 8545,
   DATA_DIR: '/data',
   CONFIG_DIR: '/data/config',
   GENESIS_FILE_NAME: 'genesis.json',
-  BOOTNODES_FILE_NAME: 'static-nodes.json',
+  STATIC_NODES_FILE_NAME: 'static-nodes.json',
   ECC_KEY_FILE_NAME: 'key.arn',
   PRIVATE_KEY_FILE_NAME: 'key.priv',
   MAX_SIZE_OF_TX_POOL: 100000,
   MAX_CONNECTIONS: 800,
-  DEFAULT_ALLOWED_RPCS: 'ETH,NET,IBFT,ADMIN,TXPOOL',
+  DEFAULT_ALLOWED_RPCS: 'ETH,NET,QBFT,ADMIN,TXPOOL',
 };
 
 export const EBS_CONFIG = {
@@ -27,8 +27,6 @@ export const BESU_HEALTH_CHECK_PARAMS = {
 
 export const CHAIN_CONFIG = {
   DEFAULT_CHAIN_ID: 70924,
-  DEFAULT_NETWORK_ID: 70924,
 };
 
-// TODO : Make configurable.
-export const BESU_IMAGE_TAG = 'latest';
+export const BESU_IMAGE_TAG = process.env.BESU_VERSION ?? '26.10.0';

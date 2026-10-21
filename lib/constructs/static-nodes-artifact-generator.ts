@@ -9,33 +9,33 @@ import { getKeySetUniqueString } from '../helper/genesis-helper';
 import { ChainArtifactWrapper } from './chain-artifact-wrapper';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 
-export interface BootNodeArtifactGeneratorProps {
+export interface StaticNodesArtifactGeneratorProps {
   readonly resourcePrefix: string;
   readonly serviceAccount: string;
   readonly region: string;
-  readonly shardId: string;
+  readonly networkId: string;
   readonly configBucket: Bucket;
   readonly validatorKeySet: ValidatorECCKeySet;
   readonly version?: number;
 }
 
-export class BootNodeArtifactGenerator extends Construct {
+export class StaticNodesArtifactGenerator extends Construct {
   readonly lambda: ChainEventHandlerLambda;
 
-  constructor(scope: Construct, id: string, props: BootNodeArtifactGeneratorProps) {
+  constructor(scope: Construct, id: string, props: StaticNodesArtifactGeneratorProps) {
     super(scope, id);
 
-    const funcName = `${props.resourcePrefix}-${ResourceName.Lambda.BootNodeArtifactGeneratorLambda}-shard-${props.shardId}`;
+    const funcName = `${props.resourcePrefix}-${ResourceName.Lambda.StaticNodesArtifactGeneratorLambda}-network-${props.networkId}`;
     const func = new ChainEventHandlerLambda(
       this,
-      `${props.resourcePrefix}${ResourceName.Lambda.BootNodeArtifactGeneratorLambda}`,
+      `${props.resourcePrefix}${ResourceName.Lambda.StaticNodesArtifactGeneratorLambda}`,
       {
-        functionPath: path.join(__dirname, `../lambda-functions/bootnode-artifact-generator-func.ts`),
+        functionPath: path.join(__dirname, `../lambda-functions/static-nodes-artifact-generator-func.ts`),
         functionName: funcName,
-        logicalId: `${props.resourcePrefix}${ResourceName.Lambda.BootNodeArtifactGeneratorLambda}`,
+        logicalId: `${props.resourcePrefix}${ResourceName.Lambda.StaticNodesArtifactGeneratorLambda}`,
         environment: {
           CONFIG_BUCKET: props.configBucket.bucketName,
-          SHARD_ID: props.shardId,
+          NETWORK_ID: props.networkId,
         },
         runtime: Runtime.NODEJS_LATEST,
       },
@@ -48,7 +48,7 @@ export class BootNodeArtifactGenerator extends Construct {
     const keySet: Map<string, string> = props.validatorKeySet.getKeyNumToPublicKey();
     const resourceId = PhysicalResourceId.of(`Static-node-${getKeySetUniqueString(Array.from(keySet.keys()))}-v${props.version}`);
 
-    const bootNodeArtifactWrapper = new ChainArtifactWrapper(this, resourceId.toString(), {
+    const staticNodesArtifactWrapper = new ChainArtifactWrapper(this, resourceId.toString(), {
       resourceId: resourceId,
       creatorfuncArn: func.functionArn,
       requestPayload: {
@@ -56,6 +56,6 @@ export class BootNodeArtifactGenerator extends Construct {
       },
     });
 
-    bootNodeArtifactWrapper.chainArtifact.node.addDependency(func);
+    staticNodesArtifactWrapper.chainArtifact.node.addDependency(func);
   }
 }

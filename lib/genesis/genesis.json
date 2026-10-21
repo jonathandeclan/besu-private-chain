@@ -1,8 +1,7 @@
 {
   "config" : {
     "chainId" : "",
-    "istanbulBlock" : 0,
-    "ibft2" : {
+    "qbft" : {
       "blockperiodseconds" : 2,
       "epochlength" : 30000,
       "requesttimeoutseconds" : 10

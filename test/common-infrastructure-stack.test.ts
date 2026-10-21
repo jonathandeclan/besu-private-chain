@@ -11,7 +11,7 @@ dotenv.config();
 describe('Common Infrastructure Stack', () => {
     const app = new App();
     const props: CommonInfrastructureProps = {
-        shardId: '3',
+        networkId: '707073',
         stage: 'dev',
         env: { account: process.env.AWS_ACCOUNT_ID, region: process.env.AWS_REGION },
     };
@@ -22,7 +22,7 @@ describe('Common Infrastructure Stack', () => {
     test('creates VPC with private isolated subnets', () => {
         template.hasResourceProperties('AWS::EC2::VPC', {
             CidrBlock: '10.0.0.0/16',
-            Tags: [{ Key: 'Name', Value: 'CommonInfrastructureStack/Shard-3-Vpc' }],
+            Tags: [{ Key: 'Name', Value: 'CommonInfrastructureStack/Network-707073-Vpc' }],
         });
 
         template.hasResourceProperties('AWS::EC2::Subnet', {
@@ -31,17 +31,13 @@ describe('Common Infrastructure Stack', () => {
     });
 
     test('creates Security Group with ingress rules for Besu Nodes', () => {
-        // Check for specific ingress rule on TCP/UDP ports
+        // P2P is TCP only: peer discovery (UDP) is disabled in favour of static nodes.
         template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
             IpProtocol: 'tcp',
             FromPort: 30303, // Example P2P port
             ToPort: 30303,
         });
-        template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
-            IpProtocol: 'udp',
-            FromPort: 30303,
-            ToPort: 30303,
-        });
+        template.resourcePropertiesCountIs('AWS::EC2::SecurityGroupIngress', { IpProtocol: 'udp' }, 0);
     });
 
     test('creates KMS key for S3 bucket encryption with rotation enabled', () => {
@@ -53,7 +49,7 @@ describe('Common Infrastructure Stack', () => {
 
     test('creates S3 bucket with encryption and lifecycle rule', () => {
         template.hasResourceProperties('AWS::S3::Bucket', {
-            BucketName: `privatechain-us-east-1-${props.env.account}-shard-3-config-bucket`,
+            BucketName: `privatechain-us-east-1-${props.env.account}-707073-config-bucket`,
             BucketEncryption: {
                 ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: 'aws:kms' } }],
             }

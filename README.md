@@ -1,11 +1,11 @@
-# AWS Blockchain Node Runners app for Besu IBFT Private Networks
+# AWS Blockchain Node Runners app for Besu QBFT Private Networks
 
 | Contributed by |
 |:--------------------:|
 | [@dmitridr](https://github.com/dmitridr), [@phuongnd11](https://github.com/phuongnd11), [@ishansohony](https://github.com/ishansohony), [@gap892003](https://github.com/gap892003), and others. |
 
 
-This blueprint deploys a ready to use private blockchain network as a service accessible via PrivateLink. The service is running [Hyperledger Besu](https://github.com/hyperledger/besu/)'s implementation of IBFT consensus under the hood, on top of ECS/EC2. 
+This blueprint deploys a ready to use private blockchain network as a service accessible via PrivateLink. The service is running [Hyperledger Besu](https://github.com/hyperledger/besu/)'s implementation of QBFT consensus under the hood, on top of ECS/EC2. 
 
 ## Table of Contents
 1. [Architecture & Features](#architecture-overview)
@@ -60,16 +60,16 @@ source .env
 ```
 
 ### Upload a Hyperledger Besu Docker Image
-As the node runner is configured to run in an isolated VPC with no internet access, it's up to you to provide the docker image of Besu you would like to use in Amazon Elastic Container Repository (ECR). This node runner was tested to work with Besu 24.7.0 : https://github.com/hyperledger/besu/releases/tag/24.7.0
+As the node runner is configured to run in an isolated VPC with no internet access, it's up to you to provide the docker image of Besu you would like to use in Amazon Elastic Container Repository (ECR). The Besu version is set by `BESU_VERSION` in your `.env` (see `.env-sample`); the tag you push to ECR must match it. Releases: https://github.com/hyperledger/besu/releases
 
-Ensure the $AWS_ACCOUNT_ID variable is set in your .env file from the previous step, and execute the following steps to download the latest besu docker image and upload it into your ECR.
+Ensure the $AWS_ACCOUNT_ID variable is set in your .env file from the previous step, and execute the following steps to download the Besu docker image and upload it into your ECR.
 
    ```bash
-   docker pull --platform linux/arm64 hyperledger/besu
-   docker tag hyperledger/besu:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/besu:latest
+   docker pull --platform linux/arm64 hyperledger/besu:$BESU_VERSION
+   docker tag hyperledger/besu:$BESU_VERSION $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/besu:$BESU_VERSION
    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-   aws ecr create-repository --repository-name besu
-   docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/besu:latest
+   aws ecr create-repository --repository-name besu --region $AWS_REGION
+   docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/besu:$BESU_VERSION
    ```
 
 When specifying `--platform` make sure to use the platform corresponding to the instance type in your `.env`, e.g. `linux/arm64` for Graviton instances. 
@@ -90,7 +90,7 @@ Then run the following commands:
    export FIRST_DEPLOY=1
    npx tsc
    npx cdk bootstrap
-   npx cdk deploy dev-noderunners-${USER}-PrivateChainValidatorFleet --require-approval never
+   npx cdk deploy PrivateChain-${STAGE:-dev}-Validators --require-approval never
    ```
 
 This will deploy a bootstrap stack to your account, followed by a basic infrastructure stack including VPC and relevant VPC resources and security groups, followed by core blockchain infrastructure including auto scaling groups and an ECS service with 0 validators. This infrastructure will remain inactive until a second deployment is performed after the correct ECC keypairs are added, in the steps below.
@@ -101,10 +101,9 @@ Currently, before or after deployment you will need to generate the keys and upl
 
 #### Automated Keypair Generation
 
-1. Install jq with the following command:
-```bash
-yum install jq
-```
+1. Install jq (e.g. `sudo yum install jq` on Amazon Linux, `brew install jq` on macOS).
+
+   The script needs `FIRST_DEPLOY` to still be exported in this shell from the first deployment step, and it must be run from the repository root.
 
 2. Run the script with the following command in the base directory to automatically use KMS to generate public and private keypairs:
 ```bash
@@ -126,7 +125,7 @@ If you wish to proceed manually in order to upload your own keys that you genera
 
 ##### Manually Upload ECC Private Keys 
 
-   After the first cdk deploy command is run and finishes succesfully, go through and find the keys labeled `Shard-1-ValidatorSignKey-X` in your AWS account, then upload your ECC private keys as base 64 encoded secrets into those secrets.
+   After the first cdk deploy command is run and finishes succesfully, go through and find the keys labeled `Network-<NETWORK_ID>-ValidatorSignKey-X` in your AWS account, then upload your ECC private keys as base 64 encoded secrets into those secrets.
 
    If you used KMS to generate the keypair, this would be the field `PrivateKeyPlaintext` in the `generate-data-key-pair` command's output.
 
@@ -144,7 +143,7 @@ Now that the infra has been deployed and keys uploaded it's time to provision th
    ```bash
    unset FIRST_DEPLOY
    npx tsc
-   npx cdk deploy dev-noderunners-${USER}-PrivateChainValidatorFleet --require-approval never
+   npx cdk deploy PrivateChain-${STAGE:-dev}-Validators --require-approval never
    ```
 
 The private chain should now be running, you should be able to validate blockheight via metrics: look for the
@@ -227,7 +226,7 @@ When changing the blueprint or a configuration, deploying can be done via :
 
    ```bash
    npx tsc
-   npx cdk deploy dev-noderunners-${USER}-PrivateChainValidatorFleet --require-approval never
+   npx cdk deploy PrivateChain-${STAGE:-dev}-Validators --require-approval never
    ```
 
 There is no need to deploy twice, as that is only necessary with the first deployment. 
@@ -242,12 +241,12 @@ Deployment is one-at-a-time and so as long as 4 or more validators are set this 
 ### Stuck Deployment
 If your stack deployment is stuck on the Auto Scaling Group step, this can be due to a signalling issue, try signaling the stack as follows, to continue:
 ```bash
-aws cloudformation signal-resource --stack-name dev-noderunners-${USER}-PrivateChainValidatorFleet --logical-resource-id validatorasg123 --unique-id  abc --status SUCCESS
+aws cloudformation signal-resource --stack-name PrivateChain-${STAGE:-dev}-Validators --logical-resource-id validatorasg123 --unique-id  abc --status SUCCESS
 ```
 
 or to abandon the deployment:
 ```bash
-aws cloudformation signal-resource --stack-name dev-noderunners-${USER}-PrivateChainValidatorFleet --logical-resource-id validatorasg123 --unique-id  abc --status FAILURE
+aws cloudformation signal-resource --stack-name PrivateChain-${STAGE:-dev}-Validators --logical-resource-id validatorasg123 --unique-id  abc --status FAILURE
 ```
 
 It may be necessary to run this a number of times with different unique ids equal to the number of validators deployed, this should get the deployment moving again and either roll back or roll forward, bypassing any ASG changes.
@@ -272,8 +271,24 @@ To remove all resources deployed by this project and avoid ongoing charges, foll
    - Navigate to the project directory
    - Run the following command:
      ```
-     cdk destroy --all
+     npx cdk destroy --all
      ```
    - Confirm the destruction when prompted
+
+3. Delete the ECR repository you created manually for the Besu image (it is not managed by the CDK stacks):
+   ```
+   aws ecr delete-repository --repository-name besu --force --region $AWS_REGION
+   ```
+
+4. Remove what the destroy leaves behind:
+   - **Validator key secrets:** CloudFormation deletes them with Secrets Manager's default 30-day recovery window, and the names stay reserved during it. To redeploy with the same `NETWORK_ID` straight away, delete them immediately:
+     ```
+     for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
+       aws secretsmanager delete-secret --secret-id "Network-$NETWORK_ID-ValidatorSignKey-$i" --force-delete-without-recovery --region $AWS_REGION
+     done
+     ```
+   - **VPC flow log group:** CDK retains it by default. Find it with `aws logs describe-log-groups --log-group-name-prefix PrivateChain- --region $AWS_REGION` and remove it with `aws logs delete-log-group --log-group-name <name> --region $AWS_REGION`.
+   - **KMS keys:** they are scheduled for deletion (30 days by default) and are not billed in the meantime. Their aliases are freed straight away, so redeploying works.
+   - **Stages other than `dev`:** the two S3 buckets are retained. Empty and delete them yourself if you no longer need the data.
 
 **Note:** Be cautious when deleting resources. Make sure you don't need any of the data before proceeding with the cleanup.

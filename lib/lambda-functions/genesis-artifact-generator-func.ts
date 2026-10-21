@@ -1,12 +1,8 @@
 import { Handler } from 'aws-lambda';
 import { uploadStringAsFile } from '../clients/s3Client';
 import genesis from '../genesis/genesis.json';
-import { getKeySetUniqueString } from '../helper/genesis-helper';
+import { encodeQbftExtraData, getKeySetUniqueString } from '../helper/genesis-helper';
 import keccak256 from 'keccak256';
-import RLP from 'rlp';
-
-const IBFT_VANITY_FIELD = "0x0000000000000000000000000000000000000000000000000000000000000000";
-const ROUND_NUMBER_ZERO = "0x00000000";
 
 export const handler: Handler = async (event, context) => {
   console.log('Config bucket: ', process.env.CONFIG_BUCKET);
@@ -20,8 +16,7 @@ export const handler: Handler = async (event, context) => {
     console.log("Address Added to List:", "0x" + address);
     addressArray.push("0x" + address);
   }
-  const extraData = RLP.encode([IBFT_VANITY_FIELD, addressArray, "", ROUND_NUMBER_ZERO, []]);
-  const extraDataHex = '0x' + Buffer.from(extraData).toString('hex');
+  const extraDataHex = encodeQbftExtraData(addressArray);
   console.log("Extra Data:", extraDataHex);
 
   const keyStringArray = Array.from(keyMap.keys());

@@ -17,7 +17,7 @@ export const ResourceName = {
   Lambda: {
     LifecycleHookName: 'LifecycleHook',
     GenesisGeneratorLambda: 'GenesisArtifactLambda',
-    BootNodeArtifactGeneratorLambda: 'BootNodeArtifactLambda',
+    StaticNodesArtifactGeneratorLambda: 'StaticNodesArtifactLambda',
     PublicKeyLambda: 'PublicKeyFetcherLambda',
   },
   PrivateHostedZone: {
@@ -39,22 +39,22 @@ export const ResourceName = {
   },
 };
 
-export function getAutoscalingGroupName(shardId: string) {
-  return `shard-${shardId}-${ResourceName.ASG.Validators}`;
+export function getAutoscalingGroupName(networkId: string) {
+  return `network-${networkId}-${ResourceName.ASG.Validators}`;
 }
 
-export function getValidatorHostName(shardId: string, valKeyNum: number) {
-  return `val${valKeyNum}.${getShardZoneName(shardId)}`;
+export function getValidatorHostName(networkId: string, valKeyNum: number) {
+  return `val${valKeyNum}.${getNetworkZoneName(networkId)}`;
 }
 
-export function getShardZoneName(shardId: string) {
-  return `ch${shardId}.${ResourceName.PrivateHostedZone.ZoneName}`;
+export function getNetworkZoneName(networkId: string) {
+  return `ch${networkId}.${ResourceName.PrivateHostedZone.ZoneName}`;
 }
 
-export function getValidatorClusterName(shardId: string) {
-  return `Shard${shardId}-ValidatorCluster`;
+export function getValidatorClusterName(networkId: string) {
+  return `Network${networkId}-ValidatorCluster`;
 }
 
-export function getValidatorFleetClusterName(shardId: string) {
-  return `Shard${shardId}-ValidatorFleetCluster`;
+export function getValidatorFleetClusterName(networkId: string) {
+  return `Network${networkId}-ValidatorFleetCluster`;
 }

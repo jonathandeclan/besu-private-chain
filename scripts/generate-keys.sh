@@ -6,8 +6,13 @@ if [[ -z $NUM_VALIDATORS ]]; then
     exit 1
 fi
 
-if [[ -z "${SHARD}" ]]; then
-    echo "SHARD is not set. Did you set .env?"
+if [[ -z "${AWS_REGION}" ]]; then
+    echo "AWS_REGION is not set. Did you set .env?"
+    exit 1
+fi
+
+if [[ -z "${NETWORK_ID}" ]]; then
+    echo "NETWORK_ID is not set. Did you set .env?"
     exit 1
 fi
 
@@ -25,9 +30,9 @@ for i in $(seq 1 $NUM_VALIDATORS);
 do
     let "j = $i - 1"
     echo "Generating Keys for Validator $j"
-    aws kms generate-data-key-pair --key-pair-spec ECC_SECG_P256K1 --key-id alias/PrivateChainEbsVolumeEncryptionKey | jq '[.PublicKey, .PrivateKeyPlaintext]' > tmp.txt
+    aws kms generate-data-key-pair --region "$AWS_REGION" --key-pair-spec ECC_SECG_P256K1 --key-id alias/PrivateChainEbsVolumeEncryptionKey | jq '[.PublicKey, .PrivateKeyPlaintext]' > tmp.txt
     cat tmp.txt | jq -r '"\"" + .[0] + "\","' >> pubkeys.txt
-    cat tmp.txt | jq -r '.[1]' | aws secretsmanager put-secret-value --secret-id "Shard-$SHARD-ValidatorSignKey-$j" --secret-string $(< /dev/stdin)
+    cat tmp.txt | jq -r '.[1]' | aws secretsmanager put-secret-value --region "$AWS_REGION" --secret-id "Network-$NETWORK_ID-ValidatorSignKey-$j" --secret-string $(< /dev/stdin)
     sleep 1
 done
 PUBKEY_FILE="./lib/constants/keys.ts"

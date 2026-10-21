@@ -10,12 +10,12 @@ export interface InstanceLaunchHookProps {
   readonly serviceAccount: string;
   readonly region: string;
   readonly tableName: string;
-  readonly shardId: string;
+  readonly networkId: string;
   readonly autoScalingGroupName: string;
   readonly hostedZone: PrivateHostedZone;
   readonly s3BucketName: string;
   readonly genesisFileName: string;
-  readonly bootnodesFileName: string;
+  readonly staticNodesFileName: string;
   readonly ebsEncryptionKeyArn: string;
 }
 
@@ -29,14 +29,14 @@ export class InstanceLaunchHook extends Construct {
 
     const func = new ChainEventHandlerLambda(this, `${props.resourcePrefix}-InstanceLaunchFunction`, {
       functionPath: path.join(__dirname, `../lambda-functions/asg-instance-launch-hook-func.ts`),
-      functionName: `Shard${props.shardId}-${props.resourcePrefix}-${ResourceName.Lambda.LifecycleHookName}-Launch`,
-      logicalId: `Shard${props.shardId}${props.resourcePrefix}${ResourceName.Lambda.LifecycleHookName}Launch`,
+      functionName: `Network${props.networkId}-${props.resourcePrefix}-${ResourceName.Lambda.LifecycleHookName}-Launch`,
+      logicalId: `Network${props.networkId}${props.resourcePrefix}${ResourceName.Lambda.LifecycleHookName}Launch`,
       environment: {
-        SHARD_ID: props.shardId,
+        NETWORK_ID: props.networkId,
         DDB_TABLE_NAME: props.tableName,
         HOSTED_ZONE_ID: props.hostedZone.hostedZoneId,
         BUCKET_NAME: props.s3BucketName,
-        BOOTNODES_FILE_NAME: props.bootnodesFileName,
+        STATIC_NODES_FILE_NAME: props.staticNodesFileName,
         GENESIS_FILE_NAME: props.genesisFileName,
         EBS_ENCRYPTION_KEY: props.ebsEncryptionKeyArn,
       },
@@ -105,7 +105,7 @@ export class InstanceLaunchHook extends Construct {
       new PolicyStatement({
         actions: ['iam:PassRole'],
         resources: [
-          `arn:aws:iam::${props.serviceAccount}:role/Shard-${props.shardId}-${ResourceName.SM.KeySigningRolePrefix}*`,
+          `arn:aws:iam::${props.serviceAccount}:role/Network-${props.networkId}-${ResourceName.SM.KeySigningRolePrefix}*`,
         ],
       }),
     );

@@ -22,15 +22,15 @@ import { CLIENT_CONFIG } from './constants/besu';
 import { NagSuppressions } from 'cdk-nag';
 
 export interface CommonInfrastructureProps extends StackProps {
-  readonly shardId: string;
+  readonly networkId: string;
   readonly stage: string;
   readonly env: Environment;
 }
 
 export class CommonInfrastructure extends Stack {
-  public static readonly STACK_NAME = 'PrivateChainCommonInfra';
+  public static readonly STACK_NAME = 'Common';
   private stage: string;
-  public readonly shardId: string;
+  public readonly networkId: string;
   private fleetVpc: IVpc;
   private fleetSecurityGroup: SecurityGroup;
   private fleetConfigBucket: Bucket;
@@ -43,7 +43,7 @@ export class CommonInfrastructure extends Stack {
     super(scope, id, props);
     this.stage = props.stage;
     this.region = props.env.region ?? 'us-east-1';
-    this.shardId = props.shardId;
+    this.networkId = props.networkId;
     this.createVPCAndSG();
     this.createKeys();
     this.createS3Buckets(props.env.account ?? '');
@@ -67,7 +67,7 @@ export class CommonInfrastructure extends Stack {
   }
 
   private createVPCAndSG() {
-    this.fleetVpc = new Vpc(this, `Shard-${this.shardId}-Vpc`, {
+    this.fleetVpc = new Vpc(this, `Network-${this.networkId}-Vpc`, {
       maxAzs: 99,
       subnetConfiguration: [
         {
@@ -88,7 +88,7 @@ export class CommonInfrastructure extends Stack {
       },
     });
 
-    new FlowLog(this, `Shard-${this.shardId}-VPCFlowLogs`, {
+    new FlowLog(this, `Network-${this.networkId}-VPCFlowLogs`, {
       resourceType: FlowLogResourceType.fromVpc(this.fleetVpc),
       destination: FlowLogDestination.toCloudWatchLogs(
         new LogGroup(this, 'LogGroup', {
@@ -110,23 +110,13 @@ export class CommonInfrastructure extends Stack {
 
     this.fleetSecurityGroup.addIngressRule(
       this.fleetSecurityGroup,
-      Port.tcp(CLIENT_CONFIG.DISCOVERY_PORT),
-      'P2P Port for Besu Nodes',
-    );
-    this.fleetSecurityGroup.addIngressRule(
-      this.fleetSecurityGroup,
-      Port.udp(CLIENT_CONFIG.DISCOVERY_PORT),
+      Port.tcp(CLIENT_CONFIG.P2P_PORT),
       'P2P Port for Besu Nodes',
     );
 
     this.fleetSecurityGroup.addEgressRule(
       this.fleetSecurityGroup,
-      Port.tcp(CLIENT_CONFIG.DISCOVERY_PORT),
-      'P2P Port for Besu Nodes',
-    );
-    this.fleetSecurityGroup.addEgressRule(
-      this.fleetSecurityGroup,
-      Port.udp(CLIENT_CONFIG.DISCOVERY_PORT),
+      Port.tcp(CLIENT_CONFIG.P2P_PORT),
       'P2P Port for Besu Nodes',
     );
 
@@ -147,7 +137,7 @@ export class CommonInfrastructure extends Stack {
     const logBucket = new Bucket(this, 'FleetAccessLogS3Bucket', {
       enforceSSL: true,
       encryption: BucketEncryption.S3_MANAGED,
-      bucketName: `privatechain-${this.region}-${serviceAccount}-shard-${this.shardId}-access-log-bucket`,
+      bucketName: `privatechain-${this.region}-${serviceAccount}-${this.networkId}-access-log-bucket`,
       removalPolicy: this.stage == "dev" ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
       autoDeleteObjects: this.stage == "dev",
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
@@ -165,9 +155,9 @@ export class CommonInfrastructure extends Stack {
     this.fleetConfigBucket = new Bucket(this, 'FleetConfigS3Bucket', {
       enforceSSL: true,
       encryption: BucketEncryption.KMS,
-      bucketName: `privatechain-${this.region}-${serviceAccount}-shard-${this.shardId}-config-bucket`,
+      bucketName: `privatechain-${this.region}-${serviceAccount}-${this.networkId}-config-bucket`,
       serverAccessLogsBucket: logBucket,
-      serverAccessLogsPrefix: `Shard${this.shardId}AccessLogs`,
+      serverAccessLogsPrefix: `Network${this.networkId}AccessLogs`,
       removalPolicy: this.stage == "dev" ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
       autoDeleteObjects: this.stage == "dev",
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,

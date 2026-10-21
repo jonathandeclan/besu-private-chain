@@ -10,7 +10,7 @@ export interface InstanceLaunchHookProps {
   readonly serviceAccount: string;
   readonly region: string;
   readonly tableName: string;
-  readonly shardId: string;
+  readonly networkId: string;
   readonly autoScalingGroupName: string;
 }
 
@@ -24,11 +24,11 @@ export class InstanceTerminationHook extends Construct {
 
     const func = new ChainEventHandlerLambda(this, `${props.resourcePrefix}-InstanceTerminationFunction`, {
       functionPath: path.join(__dirname, `../lambda-functions/asg-instance-termination-hook-func.ts`),
-      functionName: `Shard${props.shardId}-${props.resourcePrefix}-${ResourceName.Lambda.LifecycleHookName}-Termination`,
-      logicalId: `Shard${props.shardId}${props.resourcePrefix}${ResourceName.Lambda.LifecycleHookName}Termination`,
+      functionName: `Network${props.networkId}-${props.resourcePrefix}-${ResourceName.Lambda.LifecycleHookName}-Termination`,
+      logicalId: `Network${props.networkId}${props.resourcePrefix}${ResourceName.Lambda.LifecycleHookName}Termination`,
       environment: {
         DDB_TABLE_NAME: props.tableName,
-        SHARD_ID: props.shardId,
+        NETWORK_ID: props.networkId,
       },
       runtime: Runtime.NODEJS_LATEST,
     });
@@ -63,7 +63,7 @@ export class InstanceTerminationHook extends Construct {
       new PolicyStatement({
         actions: ['ecs:ListContainerInstances'],
         resources: [
-          `arn:aws:ecs:${props.region}:${props.serviceAccount}:cluster/${getValidatorClusterName(props.shardId)}`,
+          `arn:aws:ecs:${props.region}:${props.serviceAccount}:cluster/${getValidatorClusterName(props.networkId)}`,
         ],
       }),
     );
@@ -75,7 +75,7 @@ export class InstanceTerminationHook extends Construct {
         conditions: {
           ArnEquals: {
             'ecs:cluster': `arn:aws:ecs:${props.region}:${props.serviceAccount}:cluster/${getValidatorClusterName(
-              props.shardId,
+              props.networkId,
             )}`,
           },
         },

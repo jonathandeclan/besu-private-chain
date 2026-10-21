@@ -14,7 +14,7 @@ export interface GenesisGeneratorProps {
   readonly resourcePrefix: string;
   readonly serviceAccount: string;
   readonly region: string;
-  readonly shardId: string;
+  readonly networkId: string;
   readonly configBucket: Bucket;
   readonly validatorKeySet: ValidatorECCKeySet;
   readonly version?: number;
@@ -24,7 +24,7 @@ export class GenesisGenerator extends Construct {
   constructor(scope: Construct, id: string, props: GenesisGeneratorProps) {
     super(scope, id);
 
-    const funcName = `${props.resourcePrefix}-${ResourceName.Lambda.GenesisGeneratorLambda}-shard${props.shardId}`;
+    const funcName = `${props.resourcePrefix}-${ResourceName.Lambda.GenesisGeneratorLambda}-network${props.networkId}`;
     const func = new ChainEventHandlerLambda(
       this,
       `${props.resourcePrefix}GenesisFileGenerator`,
@@ -35,7 +35,7 @@ export class GenesisGenerator extends Construct {
         environment: {
           REGION: props.region,
           CONFIG_BUCKET: props.configBucket.bucketName,
-          SHARD_ID: props.shardId,
+          NETWORK_ID: props.networkId,
           CHAIN_ID: '' + CHAIN_CONFIG.DEFAULT_CHAIN_ID
         },
         runtime: Runtime.NODEJS_LATEST

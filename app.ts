@@ -9,25 +9,26 @@ import { CommonInfrastructure } from "./lib/common-infrastructure-stack";
 import { ValidatorFleetInfrastructure, ValidatorFleetInfrastructureProps } from "./lib/validator-fleet-stack";
 
 const app = new cdk.App();
-cdk.Tags.of(app).add("Project", "PrivateChain");
+cdk.Tags.of(app).add("Application", "BesuPrivateNetwork");
 
-if (process.env.USER && process.env.AWS_ACCOUNT_ID) {
+if (process.env.AWS_ACCOUNT_ID) {
+    const stage = process.env.STAGE ?? 'dev';
     const stackEnv = {
         region: process.env.AWS_REGION ?? 'us-east-1',
         account: process.env.AWS_ACCOUNT_ID
     };
     const devCommonInfraStack = new CommonInfrastructure(
         app,
-        `dev-noderunners-${process.env.USER}-${CommonInfrastructure.STACK_NAME}`,
+        `PrivateChain-${stage}-${CommonInfrastructure.STACK_NAME}`,
         {
-            shardId: '1',
-            stage: 'dev',
+            networkId: process.env.NETWORK_ID ?? '707073',
+            stage,
             env: stackEnv
         },
     );
     const devValidatorFleetInfraProps: ValidatorFleetInfrastructureProps = {
-        stage: 'dev',
-        shardId: process.env.SHARD ?? '3',
+        stage,
+        networkId: process.env.NETWORK_ID ?? '707073',
         allowedPrincipals: [new ArnPrincipal(`arn:aws:iam::${stackEnv.account}:root`)],
         imageProviderAccount: stackEnv.account,
         fleetVpc: devCommonInfraStack.getFleetVpc(),
@@ -38,11 +39,11 @@ if (process.env.USER && process.env.AWS_ACCOUNT_ID) {
 
     const devValidatorFleetStack = new ValidatorFleetInfrastructure(
         app,
-        `dev-noderunners-${process.env.USER}-${ValidatorFleetInfrastructure.STACK_NAME}`,
+        `PrivateChain-${stage}-${ValidatorFleetInfrastructure.STACK_NAME}`,
         devValidatorFleetInfraProps,
     );
 } else {
-    console.error("Set AWS_ACCOUNT_ID and USER in your env to deploy the prototype.");
+    console.error("Set AWS_ACCOUNT_ID in your env to deploy the prototype.");
 }
 
 // TODO : Enable Nag and fix all nag issues.

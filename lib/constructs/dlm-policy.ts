@@ -6,7 +6,7 @@ import { CfnTag } from 'aws-cdk-lib/core/lib/cfn-tag';
 export interface DLMPolicyProps {
   readonly targetTag: CfnTag;
   readonly stage: string;
-  readonly shardId: string;
+  readonly networkId: string;
   readonly region: string;
 }
 
@@ -21,7 +21,7 @@ export class DLMPolicy extends Construct {
 
   constructor(scope: Construct, id: string, props: DLMPolicyProps) {
     super(scope, id);
-    const suffix = `${props.shardId}-${props.stage}-${props.region}`;
+    const suffix = `${props.networkId}-${props.stage}-${props.region}`;
     const executionRole = this.createRole(suffix);
     this.createPolicy(executionRole, suffix, props);
   }

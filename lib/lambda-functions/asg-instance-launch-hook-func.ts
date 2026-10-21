@@ -24,7 +24,7 @@ import { getValidatorHostName } from '../constants/resource-names';
 import { SSMSender } from '../clients/ssmSender';
 import { getFileAsString } from '../clients/s3Client';
 import { CLIENT_CONFIG, EBS_CONFIG } from '../constants/besu';
-import { getBootNodesWithLauchingNodeRemoved, getBase64PublicKeyInHex } from '../helper/bootnode-helper';
+import { getStaticNodesWithLaunchingNodeRemoved, getBase64PublicKeyInHex } from '../helper/static-nodes-helper';
 import { EC2_CONFIG_DIR, EC2_DATA_DIR, EC2_PROXY_DIR } from '../constants/ecs';
 
 const MAX_RETRY = 10;
@@ -46,7 +46,7 @@ export const handler: Handler = async (event, context) => {
   }
   console.log('InstanceId: ', instanceId);
 
-  assert(process.env.HOSTED_ZONE_ID && process.env.SHARD_ID, 'shardId and hostedZonedId env variables are required');
+  assert(process.env.HOSTED_ZONE_ID && process.env.NETWORK_ID, 'networkId and hostedZonedId env variables are required');
 
   const instanceAZ = await getInstanceAZ(instanceId);
   const privateIpAddress = await getInstanceIpAddress(instanceId);
@@ -73,7 +73,7 @@ export const handler: Handler = async (event, context) => {
       maybeCreateVolume(assignedKey, instanceAZ, process.env.EBS_ENCRYPTION_KEY as string),
       updateIPAddressMapping(
         process.env.HOSTED_ZONE_ID as string,
-        getValidatorHostName(process.env.SHARD_ID as string, assignedKey.KeyNumber),
+        getValidatorHostName(process.env.NETWORK_ID as string, assignedKey.KeyNumber),
         privateIpAddress,
       ),
     ]);
@@ -81,11 +81,11 @@ export const handler: Handler = async (event, context) => {
 
     // Get files from S3.
     const s3Bucket = process.env.BUCKET_NAME as string;
-    const [genesisFile, bootnodeFile] = await Promise.all([
+    const [genesisFile, staticNodesFile] = await Promise.all([
       getFileAsString(process.env.GENESIS_FILE_NAME as string, s3Bucket),
-      getBootNodesWithLauchingNodeRemoved(
+      getStaticNodesWithLaunchingNodeRemoved(
         getBase64PublicKeyInHex(assignedKey.PublicKey),
-        await getFileAsString(process.env.BOOTNODES_FILE_NAME as string, s3Bucket),
+        await getFileAsString(process.env.STATIC_NODES_FILE_NAME as string, s3Bucket),
       ),
       updateKeyAssociation(assignedKey, associationId),
       attachVolume(instanceId, assignedKey.VolumeId || '', EBS_CONFIG.DATA_VOLUME_NAME),
@@ -99,7 +99,7 @@ export const handler: Handler = async (event, context) => {
     ssmSender.createDirectoryOnInstance(EC2_CONFIG_DIR);
     ssmSender.uploadFileToInstance(CLIENT_CONFIG.ECC_KEY_FILE_NAME, assignedKey.KeyArn, PATH_PREFIX);
     ssmSender.uploadFileToInstance(CLIENT_CONFIG.GENESIS_FILE_NAME, genesisFile, PATH_PREFIX);
-    ssmSender.uploadFileToInstance(CLIENT_CONFIG.BOOTNODES_FILE_NAME, bootnodeFile, PATH_PREFIX);
+    ssmSender.uploadFileToInstance(CLIENT_CONFIG.STATIC_NODES_FILE_NAME, staticNodesFile, PATH_PREFIX);
     await ssmSender.send();
     await sendLifecycleHookSuccess(event.detail);
   } catch (error) {
